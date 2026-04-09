@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: portfolio-api-dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/src
+      - backend-obj:/src/obj
+      - backend-bin:/src/bin
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - portfolio-dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: portfolio-web-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+    depends_on:
+      - backend
+    networks:
+      - portfolio-dev
+
+volumes:
+  backend-obj:
+  backend-bin:
+
+networks:
+  portfolio-dev:
+    driver: bridge
