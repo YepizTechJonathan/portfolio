@@ -212,6 +212,7 @@ def upsert_resource(
     resource_name: str,
     domain_id: str,
     subdomain: str | None,
+    site_id: int,
     ssl: bool,
     dry_run: bool,
 ) -> int:
@@ -224,7 +225,7 @@ def upsert_resource(
             client.request(
                 "POST",
                 f"/resource/{resource_id}",
-                {"name": resource_name, "enabled": True, "ssl": ssl, "domainId": domain_id, "subdomain": subdomain},
+                {"name": resource_name, "enabled": True, "ssl": ssl, "domainId": domain_id, "subdomain": subdomain, "siteId": site_id},
             )
         return resource_id
 
@@ -240,6 +241,7 @@ def upsert_resource(
             "http": True,
             "subdomain": subdomain,
             "domainId": domain_id,
+            "siteId": site_id,
             "protocol": "tcp",
         },
     )
@@ -274,14 +276,13 @@ def upsert_target(
         None,
     )
 
+    # Pangolin 1.7.x stores the site on the resource itself; target create/update
+    # rejects siteId/path/pathMatchType even though newer public docs list them.
     body = {
-        "siteId": site_id,
         "ip": target_host,
         "port": target_port,
         "method": target_method,
         "enabled": True,
-        "path": "/",
-        "pathMatchType": "prefix",
     }
 
     if matching:
@@ -343,7 +344,7 @@ def main() -> int:
                 f"subdomain={subdomain if subdomain is not None else '<root>'}, siteId={site_id}"
             )
             resource_id = upsert_resource(
-                client, org_id, full_domain, resource_name, domain_id, subdomain, ssl, args.dry_run
+                client, org_id, full_domain, resource_name, domain_id, subdomain, site_id, ssl, args.dry_run
             )
             upsert_target(client, resource_id, site_id, target_host, target_port, target_method, args.dry_run)
 
