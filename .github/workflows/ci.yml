@@ -21,13 +21,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: Dockerfile
           push: false
           tags: portfolio-backend:ci
       - name: Build frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
-          file: Dockerfile
           push: false
           tags: portfolio-frontend:ci

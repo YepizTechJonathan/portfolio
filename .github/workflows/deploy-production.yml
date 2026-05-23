@@ -37,7 +37,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: Dockerfile
           push: true
           tags: |
             ${{ steps.vars.outputs.backend_image_name }}:${{ steps.vars.outputs.image_tag }}
@@ -46,7 +45,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
-          file: Dockerfile
           push: true
           tags: |
             ${{ steps.vars.outputs.frontend_image_name }}:${{ steps.vars.outputs.image_tag }}
