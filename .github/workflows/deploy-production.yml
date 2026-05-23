@@ -1,25 +1,57 @@
 name: Deploy Production
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
+  packages: write
 concurrency:
   group: portfolio-production
   cancel-in-progress: false
-
 jobs:
-  deploy:
-    name: Deploy Portfolio site
+  build-push-deploy:
+    name: Build, push, and deploy Portfolio site
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy to server if production secrets are configured
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Prepare image metadata
+        id: vars
+        shell: bash
+        run: |
+          BASE_IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "backend_image_name=${BASE_IMAGE}/backend" >> "$GITHUB_OUTPUT"
+          echo "frontend_image_name=${BASE_IMAGE}/frontend" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.backend_image_name }}:${{ steps.vars.outputs.image_tag }}
+            ${{ steps.vars.outputs.backend_image_name }}:latest
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.frontend_image_name }}:${{ steps.vars.outputs.image_tag }}
+            ${{ steps.vars.outputs.frontend_image_name }}:latest
+      - name: Deploy to IONOS
         shell: bash
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
@@ -28,22 +60,25 @@ jobs:
           PROD_PORT: ${{ secrets.PROD_PORT }}
           PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
           PROD_PANGOLIN_NETWORK: ${{ secrets.PROD_PANGOLIN_NETWORK }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
+          BACKEND_IMAGE_NAME: ${{ steps.vars.outputs.backend_image_name }}
+          FRONTEND_IMAGE_NAME: ${{ steps.vars.outputs.frontend_image_name }}
+          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
         run: |
           set -Eeuo pipefail
-
-          if [ -z "${PROD_HOST:-}" ] || [ -z "${PROD_USER:-}" ] || [ -z "${PROD_SSH_KEY:-}" ] || [ -z "${PROD_APP_DIR:-}" ]; then
-            echo "Skipping deployment: set PROD_HOST, PROD_USER, PROD_SSH_KEY, and PROD_APP_DIR to enable it."
-            exit 0
-          fi
-
+          : "${PROD_HOST:?Missing PROD_HOST}"
+          : "${PROD_USER:?Missing PROD_USER}"
+          : "${PROD_SSH_KEY:?Missing PROD_SSH_KEY}"
+          : "${PROD_APP_DIR:?Missing PROD_APP_DIR}"
+          : "${PROD_PANGOLIN_NETWORK:?Missing PROD_PANGOLIN_NETWORK}"
           PROD_PORT="${PROD_PORT:-22}"
-          PROD_PANGOLIN_NETWORK="${PROD_PANGOLIN_NETWORK:-pangolin}"
-
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf "%s\n" "$PROD_SSH_KEY" > ~/.ssh/production_key
           chmod 600 ~/.ssh/production_key
           ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts
-
-          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" \
-            "cd '$PROD_APP_DIR' && git pull --ff-only && PANGOLIN_NETWORK='$PROD_PANGOLIN_NETWORK' ./scripts/deploy-prod.sh"
+          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "mkdir -p '$PROD_APP_DIR/scripts'"
+          scp -i ~/.ssh/production_key -P "$PROD_PORT" docker-compose.prod.yml "$PROD_USER@$PROD_HOST:$PROD_APP_DIR/docker-compose.prod.yml"
+          scp -i ~/.ssh/production_key -P "$PROD_PORT" scripts/deploy-prod.sh "$PROD_USER@$PROD_HOST:$PROD_APP_DIR/scripts/deploy-prod.sh"
+          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "cd '$PROD_APP_DIR' && chmod +x scripts/deploy-prod.sh && BACKEND_IMAGE_NAME='$BACKEND_IMAGE_NAME' FRONTEND_IMAGE_NAME='$FRONTEND_IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' PANGOLIN_NETWORK='$PROD_PANGOLIN_NETWORK' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' ./scripts/deploy-prod.sh"

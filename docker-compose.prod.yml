@@ -1,27 +1,21 @@
 name: portfolio-prod
-
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: portfolio-backend:prod
     container_name: portfolio-prod-api
+    image: "${BACKEND_IMAGE_NAME:?BACKEND_IMAGE_NAME is required}:${IMAGE_TAG:?IMAGE_TAG is required}"
     restart: unless-stopped
+    expose:
+      - "8080"
     volumes:
-      - db-data:/app/data
+      - backend-data:/app/data
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Production
     networks:
       - app
-
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: portfolio-frontend:prod
     container_name: portfolio-prod-web
+    image: "${FRONTEND_IMAGE_NAME:?FRONTEND_IMAGE_NAME is required}:${IMAGE_TAG:?IMAGE_TAG is required}"
     restart: unless-stopped
     expose:
       - "80"
@@ -30,13 +24,17 @@ services:
     networks:
       - app
       - pangolin
-
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 volumes:
-  db-data:
-
+  backend-data:
 networks:
   app:
     driver: bridge
   pangolin:
     external: true
-    name: "${PANGOLIN_NETWORK:-pangolin}"
+    name: "${PANGOLIN_NETWORK:?PANGOLIN_NETWORK is required}"
