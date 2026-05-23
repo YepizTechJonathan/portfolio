@@ -17,3 +17,6 @@ backend/portfolio.db-wal
 .DS_Store
 Thumbs.db
 *.log
+.env.dev
+.env.prod
+.env.pangolin-dev

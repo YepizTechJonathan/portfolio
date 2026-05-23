@@ -1,9 +1,12 @@
+name: portfolio-prod
+
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: portfolio-api
+    image: portfolio-backend:prod
+    container_name: portfolio-prod-api
     restart: unless-stopped
     volumes:
       - db-data:/app/data
@@ -11,26 +14,29 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Production
     networks:
-      - portfolio-net
+      - app
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: portfolio-web
+    image: portfolio-frontend:prod
+    container_name: portfolio-prod-web
     restart: unless-stopped
-    ports:
-      - "9090:80"
+    expose:
+      - "80"
     depends_on:
       - backend
     networks:
-      - portfolio-net
+      - app
+      - pangolin
 
 volumes:
   db-data:
-    driver: local
 
 networks:
-  portfolio-net:
-  
+  app:
     driver: bridge
+  pangolin:
+    external: true
+    name: "${PANGOLIN_NETWORK:-pangolin}"

@@ -1,0 +1,49 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Portfolio site
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server if production secrets are configured
+        shell: bash
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
+          PROD_PANGOLIN_NETWORK: ${{ secrets.PROD_PANGOLIN_NETWORK }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${PROD_HOST:-}" ] || [ -z "${PROD_USER:-}" ] || [ -z "${PROD_SSH_KEY:-}" ] || [ -z "${PROD_APP_DIR:-}" ]; then
+            echo "Skipping deployment: set PROD_HOST, PROD_USER, PROD_SSH_KEY, and PROD_APP_DIR to enable it."
+            exit 0
+          fi
+
+          PROD_PORT="${PROD_PORT:-22}"
+          PROD_PANGOLIN_NETWORK="${PROD_PANGOLIN_NETWORK:-pangolin}"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf "%s\n" "$PROD_SSH_KEY" > ~/.ssh/production_key
+          chmod 600 ~/.ssh/production_key
+          ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" \
+            "cd '$PROD_APP_DIR' && git pull --ff-only && PANGOLIN_NETWORK='$PROD_PANGOLIN_NETWORK' ./scripts/deploy-prod.sh"
