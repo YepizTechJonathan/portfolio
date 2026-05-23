@@ -165,8 +165,9 @@ def find_site(client: PangolinClient, org_id: str, site_id: str, site_name: str)
             return int(site_id)
         except ValueError:
             # Bitwarden/GitHub may provide a Pangolin niceId/name instead of the
-            # numeric siteId. Fall through to API lookup rather than failing.
-            site_query = site_id
+            # numeric siteId. Prefer an explicit PANGOLIN_SITE_NAME override when
+            # available, otherwise fall through to API lookup using the value.
+            site_query = site_name or site_id
 
     if not site_query:
         raise PangolinError("Set PANGOLIN_SITE_ID or PANGOLIN_SITE_NAME so the script knows which Pangolin site owns the target.")
