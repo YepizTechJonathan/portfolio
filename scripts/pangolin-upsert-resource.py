@@ -24,6 +24,8 @@ class PangolinError(RuntimeError):
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str:
     value = os.environ.get(name, default)
+    if value is not None:
+        value = value.strip()
     if required and not value:
         raise PangolinError(f"Missing required environment variable: {name}")
     return value or ""
