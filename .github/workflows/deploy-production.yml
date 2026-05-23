@@ -41,6 +41,8 @@ jobs:
           tags: |
             ${{ steps.vars.outputs.backend_image_name }}:${{ steps.vars.outputs.image_tag }}
             ${{ steps.vars.outputs.backend_image_name }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
@@ -49,17 +51,28 @@ jobs:
           tags: |
             ${{ steps.vars.outputs.frontend_image_name }}:${{ steps.vars.outputs.image_tag }}
             ${{ steps.vars.outputs.frontend_image_name }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Load deployment secrets from Bitwarden
+        uses: bitwarden/sm-action@v3
+        with:
+          access_token: ${{ secrets.SM_ACCESS_TOKEN }}
+          secrets: |
+            ${{ vars.BW_PROD_HOST_ID }} > PROD_HOST
+            ${{ vars.BW_PROD_USER_ID }} > PROD_USER
+            ${{ vars.BW_PROD_SSH_KEY_ID }} > PROD_SSH_KEY
+            ${{ vars.BW_PROD_PORT_ID }} > PROD_PORT
+            ${{ vars.BW_PROD_APP_DIR_ID }} > PROD_APP_DIR
+            ${{ vars.BW_PROD_PANGOLIN_NETWORK_ID }} > PROD_PANGOLIN_NETWORK
+            ${{ vars.BW_GHCR_PAT_ID }} > GHCR_TOKEN
+            ${{ vars.BW_PANGOLIN_API_URL_ID }} > PANGOLIN_API_URL
+            ${{ vars.BW_PANGOLIN_API_KEY_ID }} > PANGOLIN_API_KEY
+            ${{ vars.BW_PANGOLIN_ORG_ID_ID }} > PANGOLIN_ORG_ID
+            ${{ vars.BW_PANGOLIN_PROD_SITE_ID_ID }} > PANGOLIN_SITE_ID
       - name: Deploy to IONOS
         shell: bash
         env:
-          PROD_HOST: ${{ secrets.PROD_HOST }}
-          PROD_USER: ${{ secrets.PROD_USER }}
-          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
-          PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_APP_DIR: ${{ secrets.PROD_APP_DIR }}
-          PROD_PANGOLIN_NETWORK: ${{ secrets.PROD_PANGOLIN_NETWORK }}
           GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
           BACKEND_IMAGE_NAME: ${{ steps.vars.outputs.backend_image_name }}
           FRONTEND_IMAGE_NAME: ${{ steps.vars.outputs.frontend_image_name }}
           IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
@@ -76,7 +89,32 @@ jobs:
           printf "%s\n" "$PROD_SSH_KEY" > ~/.ssh/production_key
           chmod 600 ~/.ssh/production_key
           ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts
-          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "mkdir -p '$PROD_APP_DIR/scripts'"
+          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "mkdir -p $(printf %q "$PROD_APP_DIR/scripts")"
           scp -i ~/.ssh/production_key -P "$PROD_PORT" docker-compose.prod.yml "$PROD_USER@$PROD_HOST:$PROD_APP_DIR/docker-compose.prod.yml"
           scp -i ~/.ssh/production_key -P "$PROD_PORT" scripts/deploy-prod.sh "$PROD_USER@$PROD_HOST:$PROD_APP_DIR/scripts/deploy-prod.sh"
-          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "cd '$PROD_APP_DIR' && chmod +x scripts/deploy-prod.sh && BACKEND_IMAGE_NAME='$BACKEND_IMAGE_NAME' FRONTEND_IMAGE_NAME='$FRONTEND_IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' PANGOLIN_NETWORK='$PROD_PANGOLIN_NETWORK' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' ./scripts/deploy-prod.sh"
+          REMOTE_CMD="cd $(printf %q "$PROD_APP_DIR") && chmod +x scripts/deploy-prod.sh && BACKEND_IMAGE_NAME=$(printf %q "$BACKEND_IMAGE_NAME") FRONTEND_IMAGE_NAME=$(printf %q "$FRONTEND_IMAGE_NAME") IMAGE_TAG=$(printf %q "$IMAGE_TAG") PANGOLIN_NETWORK=$(printf %q "$PROD_PANGOLIN_NETWORK") GHCR_USERNAME=$(printf %q "$GHCR_USERNAME") GHCR_TOKEN=$(printf %q "$GHCR_TOKEN") ./scripts/deploy-prod.sh"
+          ssh -i ~/.ssh/production_key -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "$REMOTE_CMD"
+      - name: Configure Pangolin route
+        shell: bash
+        env:
+          PANGOLIN_SITE_NAME: ${{ vars.PANGOLIN_SITE_NAME }}
+          PANGOLIN_RESOURCE_NAME: ${{ vars.PANGOLIN_RESOURCE_NAME }}
+          PANGOLIN_RESOURCE_DOMAINS: ${{ vars.PANGOLIN_RESOURCE_DOMAINS }}
+          PANGOLIN_TARGET_HOST: portfolio-prod-web
+          PANGOLIN_TARGET_PORT: 80
+          PANGOLIN_TARGET_METHOD: http
+          PANGOLIN_ENABLE_SSL: true
+          PANGOLIN_VERIFY_PUBLIC: ${{ vars.PANGOLIN_VERIFY_PUBLIC }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${PANGOLIN_API_URL:-}" ] || [ -z "${PANGOLIN_API_KEY:-}" ] || [ -z "${PANGOLIN_ORG_ID:-}" ]; then
+            echo "Skipping Pangolin API automation: Bitwarden did not provide PANGOLIN_API_URL, PANGOLIN_API_KEY, and PANGOLIN_ORG_ID."
+            exit 0
+          fi
+          export PANGOLIN_RESOURCE_NAME="${PANGOLIN_RESOURCE_NAME:-Portfolio}"
+          export PANGOLIN_RESOURCE_DOMAINS="${PANGOLIN_RESOURCE_DOMAINS:-jonathanyepiz.com,www.jonathanyepiz.com}"
+          if [ "${PANGOLIN_VERIFY_PUBLIC:-false}" = "true" ]; then
+            python3 scripts/pangolin-upsert-resource.py --verify
+          else
+            python3 scripts/pangolin-upsert-resource.py
+          fi
