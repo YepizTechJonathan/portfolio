@@ -15,8 +15,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate Docker Compose files
         run: |
-          docker compose --env-file .env.dev -f docker-compose.dev.yml config --quiet
-          BACKEND_IMAGE_NAME=ghcr.io/example/portfolio/backend FRONTEND_IMAGE_NAME=ghcr.io/example/portfolio/frontend IMAGE_TAG=test PANGOLIN_NETWORK=pangolin docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+          docker compose -f docker-compose.dev.yml config --quiet
+          BACKEND_IMAGE_NAME=ghcr.io/example/portfolio/backend FRONTEND_IMAGE_NAME=ghcr.io/example/portfolio/frontend IMAGE_TAG=test PANGOLIN_NETWORK=pangolin docker compose -f docker-compose.prod.yml config --quiet
       - name: Build backend image
         uses: docker/build-push-action@v6
         with:
