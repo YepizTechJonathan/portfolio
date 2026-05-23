@@ -1,0 +1,31 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - '**'
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Validate Portfolio site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate Docker Compose files
+        run: |
+          docker compose -f docker-compose.dev.yml config --quiet
+          BACKEND_IMAGE_NAME=ghcr.io/example/portfolio/backend FRONTEND_IMAGE_NAME=ghcr.io/example/portfolio/frontend IMAGE_TAG=test PANGOLIN_NETWORK=pangolin docker compose -f docker-compose.prod.yml config --quiet
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: portfolio-backend:ci
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: portfolio-frontend:ci

@@ -1,11 +1,13 @@
+name: portfolio-dev
+
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: portfolio-api-dev
+    container_name: portfolio-dev-api
     ports:
-      - "5000:5000"
+      - "127.0.0.1:${DEV_BACKEND_PORT:-5000}:5000"
     volumes:
       - ./backend:/src
       - backend-obj:/src/obj
@@ -14,15 +16,15 @@ services:
       - ASPNETCORE_URLS=http://+:5000
       - ASPNETCORE_ENVIRONMENT=Development
     networks:
-      - portfolio-dev
+      - app
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: portfolio-web-dev
+    container_name: portfolio-dev-web
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${DEV_FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
@@ -30,12 +32,16 @@ services:
     depends_on:
       - backend
     networks:
-      - portfolio-dev
+      - app
+      - pangolin-dev
 
 volumes:
   backend-obj:
   backend-bin:
 
 networks:
-  portfolio-dev:
+  app:
     driver: bridge
+  pangolin-dev:
+    external: true
+    name: "${DEV_PANGOLIN_NETWORK:-pangolin-dev}"
