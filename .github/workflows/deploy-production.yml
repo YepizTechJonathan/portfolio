@@ -97,6 +97,7 @@ jobs:
       - name: Configure Pangolin route
         shell: bash
         env:
+          PANGOLIN_API_URL: ${{ vars.PANGOLIN_API_URL }}
           PANGOLIN_ORG_ID: ${{ vars.PANGOLIN_ORG_ID }}
           PANGOLIN_SITE_ID: ${{ vars.PANGOLIN_SITE_ID }}
           PANGOLIN_SITE_NAME: ${{ vars.PANGOLIN_SITE_NAME }}
