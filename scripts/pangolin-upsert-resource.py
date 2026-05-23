@@ -225,7 +225,7 @@ def upsert_resource(
             client.request(
                 "POST",
                 f"/resource/{resource_id}",
-                {"name": resource_name, "enabled": True, "ssl": ssl, "domainId": domain_id, "subdomain": subdomain, "siteId": site_id},
+                {"name": resource_name, "enabled": True, "ssl": ssl, "domainId": domain_id, "subdomain": subdomain},
             )
         return resource_id
 
@@ -269,15 +269,15 @@ def upsert_target(
         (
             t
             for t in targets
-            if int(t.get("siteId", 0)) == site_id
+            if ("siteId" not in t or int(t.get("siteId") or 0) == site_id)
             and str(t.get("ip")) == target_host
             and int(t.get("port", 0)) == target_port
         ),
         None,
     )
 
-    # Pangolin 1.7.x stores the site on the resource itself; target create/update
-    # rejects siteId/path/pathMatchType even though newer public docs list them.
+    # Pangolin 1.7.x target create/update rejects siteId/path/pathMatchType
+    # even though newer public docs list them. The resource carries site ownership.
     body = {
         "ip": target_host,
         "port": target_port,
