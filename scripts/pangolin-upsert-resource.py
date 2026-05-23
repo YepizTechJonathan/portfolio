@@ -171,7 +171,7 @@ def find_site(client: PangolinClient, org_id: str, site_id: str, site_name: str)
 
     response = client.request(
         "GET",
-        f"/org/{org_id}/sites?{urllib.parse.urlencode({pageSize: 100, page: 1, query: site_query})}",
+        f"/org/{org_id}/sites?{urllib.parse.urlencode({'pageSize': 100, 'page': 1, 'query': site_query})}",
     )
     sites = first_list(response, ("sites",))
     selected = next(
