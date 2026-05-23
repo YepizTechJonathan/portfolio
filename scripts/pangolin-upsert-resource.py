@@ -157,29 +157,37 @@ def find_domain(
 
 
 def find_site(client: PangolinClient, org_id: str, site_id: str, site_name: str) -> int:
+    site_query = site_id or site_name
     if site_id:
-        return int(site_id)
+        try:
+            return int(site_id)
+        except ValueError:
+            # Bitwarden/GitHub may provide a Pangolin niceId/name instead of the
+            # numeric siteId. Fall through to API lookup rather than failing.
+            site_query = site_id
 
-    if not site_name:
+    if not site_query:
         raise PangolinError("Set PANGOLIN_SITE_ID or PANGOLIN_SITE_NAME so the script knows which Pangolin site owns the target.")
 
     response = client.request(
         "GET",
-        f"/org/{org_id}/sites?{urllib.parse.urlencode({'pageSize': 100, 'page': 1, 'query': site_name})}",
+        f"/org/{org_id}/sites?{urllib.parse.urlencode({pageSize: 100, page: 1, query: site_query})}",
     )
     sites = first_list(response, ("sites",))
     selected = next(
         (
             s
             for s in sites
-            if s.get("name") == site_name or s.get("niceId") == site_name or str(s.get("siteId")) == site_name
+            if s.get("name") == site_query
+            or s.get("niceId") == site_query
+            or str(s.get("siteId")) == site_query
+            or str(s.get("id")) == site_query
         ),
         None,
     )
     if not selected:
-        raise PangolinError(f"Pangolin site {site_name!r} was not found. Use PANGOLIN_SITE_ID if names are ambiguous.")
+        raise PangolinError(f"Pangolin site {site_query!r} was not found. Use PANGOLIN_SITE_ID if names are ambiguous.")
     return int(get_id(selected, "siteId", "id"))
-
 
 def list_resources(client: PangolinClient, org_id: str, query: str) -> list[dict[str, Any]]:
     params = urllib.parse.urlencode({"pageSize": 100, "page": 1, "query": query})

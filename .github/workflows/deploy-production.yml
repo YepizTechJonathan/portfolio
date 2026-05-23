@@ -112,7 +112,7 @@ jobs:
             exit 0
           fi
           export PANGOLIN_RESOURCE_NAME="${PANGOLIN_RESOURCE_NAME:-Portfolio}"
-          export PANGOLIN_RESOURCE_DOMAINS="${PANGOLIN_RESOURCE_DOMAINS:-jonathanyepiz.com,www.jonathanyepiz.com}"
+          export PANGOLIN_RESOURCE_DOMAINS="${PANGOLIN_RESOURCE_DOMAINS:-me.yepiz.tech}"
           if [ "${PANGOLIN_VERIFY_PUBLIC:-false}" = "true" ]; then
             python3 scripts/pangolin-upsert-resource.py --verify
           else
