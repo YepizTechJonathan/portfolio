@@ -1,43 +1,43 @@
 name: portfolio-dev
 
+# The dev site: built from the same Dockerfiles as production (nginx serving the Vite build, the API on
+# 8080). On Kihon the Web Factory runs it at https://portfolio.yepiztech.dev (the frontend joins its
+# dev-preview network). Locally: http://127.0.0.1:8088, API http://127.0.0.1:5000; for hot reload run
+# `npm run dev` in frontend/ against that API.
 services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: portfolio-dev-api
     ports:
-      - "127.0.0.1:${DEV_BACKEND_PORT:-5000}:5000"
-    volumes:
-      - ./backend:/src
-      - backend-obj:/src/obj
-      - backend-bin:/src/bin
+      - "127.0.0.1:${DEV_BACKEND_PORT:-5000}:8080"
     environment:
-      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - backend-data:/app/data
     networks:
       - app
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: portfolio-dev-web
     ports:
-      - "127.0.0.1:${DEV_FRONTEND_PORT:-3000}:3000"
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/index.html:/app/index.html
-      - ./frontend/vite.config.js:/app/vite.config.js
+      - "127.0.0.1:${DEV_FRONTEND_PORT:-8088}:80"
     depends_on:
       - backend
     networks:
       - app
       - pangolin-dev
+      - dev-preview
+    restart: unless-stopped
 
 volumes:
-  backend-obj:
-  backend-bin:
+  backend-data:
 
 networks:
   app:
@@ -45,3 +45,6 @@ networks:
   pangolin-dev:
     external: true
     name: "${DEV_PANGOLIN_NETWORK:-pangolin-dev}"
+  dev-preview:
+    external: true
+    name: "${DEV_PREVIEW_NETWORK:-dev-preview}"
