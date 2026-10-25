@@ -1,0 +1,55 @@
+# Dev deploy, run by Forgejo (yepiztech/portfolio) on every push to dev. The Web Factory on Kihon hands
+# each new dev commit over from GitHub; this builds the API and the frontend (what GitHub CI's image
+# builds do), then asks the Web Factory to rebuild the dev site at https://portfolio.yepiztech.dev.
+# Production is untouched (GitHub Actions deploys main). GitHub ignores this folder.
+name: deploy-dev
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ren
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+    timeout-minutes: 30
+    env:
+      SITE: portfolio
+      FACTORY: https://yepiztech-webfactory.yepiztech.dev
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Tools for checkout and the frontend build
+        run: |
+          set -eu
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ca-certificates curl git python3 >/dev/null
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
+          apt-get install -y -qq --no-install-recommends nodejs >/dev/null
+          node --version
+      - uses: actions/checkout@v4
+      - name: API build
+        run: dotnet publish backend/Portfolio.API.csproj -c Release -o /tmp/api
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Deploy through the Web Factory
+        env:
+          TOKEN: ${{ secrets.WEBFACTORY_TOKEN }}
+        run: |
+          set -eu
+          api="$FACTORY/internal/factory/deploy"
+          curl -fsS -m 20 -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d "{\"site\": \"$SITE\"}" "$api" >/dev/null
+          echo "Queued $SITE on the Web Factory; waiting for it to build and answer."
+          for i in $(seq 1 90); do
+            sleep 10
+            state=$(curl -fsS -m 20 -H "Authorization: Bearer $TOKEN" "$api/$SITE")
+            status=$(printf '%s' "$state" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+            case "$status" in
+              live)   printf '%s' "$state" | python3 -c 'import json,sys; s=json.load(sys.stdin); print("Live:", s["url"], s.get("commit"), s.get("subject") or "")'; exit 0 ;;
+              failed) printf '%s' "$state" | python3 -c 'import json,sys; print("Failed:", json.load(sys.stdin).get("error"))'; exit 1 ;;
+            esac
+          done
+          echo "Still $status after 15 minutes"; exit 1
